@@ -1,23 +1,199 @@
-from flask import Flask, request, jsonify, render_template_string
-from flask_cors import CORS
+import streamlit as st
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
 
-app = Flask(__name__)
-CORS(app)
-
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini API
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    print("❌ Please create .env file with GEMINI_API_KEY=your_key_here")
-    exit(1)
+# Configure Streamlit page
+st.set_page_config(
+    page_title="Chai aur Code - Hitesh Sir AI Assistant",
+    page_icon="☕",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel("gemini-2.0-flash")
+# Custom CSS for dark magical theme
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+    
+    .stApp {
+        background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+        font-family: 'Poppins', sans-serif;
+    }
+    
+    /* Hide Streamlit default elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Main container styling */
+    .main-header {
+        text-align: center;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        margin-bottom: 30px;
+    }
+    
+    .profile-img {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        border: 4px solid #ff6b6b;
+        box-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { box-shadow: 0 0 30px rgba(255, 107, 107, 0.5); }
+        50% { box-shadow: 0 0 50px rgba(255, 107, 107, 0.8); }
+        100% { box-shadow: 0 0 30px rgba(255, 107, 107, 0.5); }
+    }
+    
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+        background-size: 300% 300%;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: gradient 3s ease infinite;
+        margin: 20px 0 10px 0;
+    }
+    
+    @keyframes gradient {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    .subtitle {
+        font-size: 1.2rem;
+        color: #b8b8b8;
+        margin-bottom: 20px;
+    }
+    
+    /* Chat container styling */
+    .chat-container {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(15px);
+        border-radius: 20px;
+        padding: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        margin-bottom: 20px;
+    }
+    
+    /* Message styling */
+    .user-message {
+        background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 20px 20px 5px 20px;
+        margin: 10px 0;
+        margin-left: 20%;
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+    }
+    
+    .bot-message {
+        background: linear-gradient(45deg, #4ecdc4, #45b7d1);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 20px 20px 20px 5px;
+        margin: 10px 0;
+        margin-right: 20%;
+        box-shadow: 0 4px 15px rgba(78, 205, 196, 0.3);
+        white-space: pre-wrap;
+    }
+    
+    /* Input styling */
+    .stTextInput > div > div > input {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 25px;
+        padding: 15px 20px;
+        backdrop-filter: blur(10px);
+    }
+    
+    .stTextInput > div > div > input:focus {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: #4ecdc4;
+        box-shadow: 0 0 20px rgba(78, 205, 196, 0.3);
+    }
+    
+    /* Button styling */
+    .stButton > button {
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        color: white;
+        border: none;
+        border-radius: 25px;
+        padding: 15px 25px;
+        font-weight: 600;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+        width: 100%;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Welcome message */
+    .welcome-message {
+        text-align: center;
+        color: #b8b8b8;
+        font-style: italic;
+        padding: 50px 0;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        margin: 20px 0;
+    }
+    
+    /* Stars animation */
+    .stars {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: -1;
+    }
+    
+    .star {
+        position: absolute;
+        width: 2px;
+        height: 2px;
+        background: #fff;
+        border-radius: 50%;
+        animation: twinkle 3s infinite;
+    }
+    
+    @keyframes twinkle {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 1; }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Initialize Gemini API
+def initialize_gemini():
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        st.error("❌ Please set GEMINI_API_KEY in your environment variables or .env file")
+        st.stop()
+    
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel("gemini-2.0-flash")
+
 
 # Hitesh Choudhary Persona Prompt
 SYSTEM_PROMPT = '''
@@ -61,483 +237,93 @@ You teach in a friendly, calm, and polite tone, often using phrases like:
 Always explain concepts using such relatable analogies and maintain your signature teaching style.
 '''
 
-# HTML Template with Dark Magical Theme
-HTML_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chai aur Code - Hitesh Sir AI Assistant</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
-            min-height: 100vh;
-            color: #fff;
-            overflow-x: hidden;
-        }
-        
-        /* Magical Background Animation */
-        .stars {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-        }
-        
-        .star {
-            position: absolute;
-            width: 2px;
-            height: 2px;
-            background: #fff;
-            border-radius: 50%;
-            animation: twinkle 3s infinite;
-        }
-        
-        @keyframes twinkle {
-            0%, 100% { opacity: 0.3; }
-            50% { opacity: 1; }
-        }
-        
-        /* Floating Particles */
-        .particle {
-            position: absolute;
-            width: 4px;
-            height: 4px;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            border-radius: 50%;
-            animation: float 6s infinite ease-in-out;
-        }
-        
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(180deg); }
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            position: relative;
-            z-index: 10;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        }
-        
-        .profile-img {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            border: 4px solid #ff6b6b;
-            margin: 0 auto 20px;
-            display: block;
-            box-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { box-shadow: 0 0 30px rgba(255, 107, 107, 0.5); }
-            50% { box-shadow: 0 0 50px rgba(255, 107, 107, 0.8); }
-            100% { box-shadow: 0 0 30px rgba(255, 107, 107, 0.5); }
-        }
-        
-        .title {
-            font-size: 2.5rem;
-            font-weight: 700;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
-            background-size: 300% 300%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: gradient 3s ease infinite;
-            margin-bottom: 10px;
-        }
-        
-        @keyframes gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        
-        .subtitle {
-            font-size: 1.2rem;
-            color: #b8b8b8;
-            margin-bottom: 20px;
-        }
-        
-        .chat-container {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            padding: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            height: 70vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            margin-bottom: 20px;
-            padding-right: 10px;
-        }
-        
-        .chat-messages::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        .chat-messages::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-        }
-        
-        .chat-messages::-webkit-scrollbar-thumb {
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            border-radius: 4px;
-        }
-        
-        .message {
-            margin-bottom: 20px;
-            animation: slideIn 0.5s ease;
-        }
-        
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .user-message {
-            text-align: right;
-        }
-        
-        .user-message .message-content {
-            background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 20px 20px 5px 20px;
-            display: inline-block;
-            max-width: 70%;
-            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
-        }
-        
-        .bot-message .message-content {
-            background: linear-gradient(45deg, #4ecdc4, #45b7d1);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 20px 20px 20px 5px;
-            display: inline-block;
-            max-width: 80%;
-            box-shadow: 0 4px 15px rgba(78, 205, 196, 0.3);
-            white-space: pre-wrap;
-        }
-        
-        .input-container {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-        
-        .message-input {
-            flex: 1;
-            padding: 15px 20px;
-            border: none;
-            border-radius: 25px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 16px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
-        }
-        
-        .message-input:focus {
-            outline: none;
-            background: rgba(255, 255, 255, 0.15);
-            border-color: #4ecdc4;
-            box-shadow: 0 0 20px rgba(78, 205, 196, 0.3);
-        }
-        
-        .message-input::placeholder {
-            color: #b8b8b8;
-        }
-        
-        .send-btn {
-            padding: 15px 25px;
-            border: none;
-            border-radius: 25px;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-        }
-        
-        .send-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-        }
-        
-        .send-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .loading {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #4ecdc4;
-        }
-        
-        .loading-dots {
-            display: flex;
-            gap: 5px;
-        }
-        
-        .loading-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #4ecdc4;
-            animation: bounce 1.4s infinite ease-in-out both;
-        }
-        
-        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
-        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
-        
-        @keyframes bounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1); }
-        }
-        
-        .welcome-message {
-            text-align: center;
-            color: #b8b8b8;
-            font-style: italic;
-            margin: 50px 0;
-        }
-        
-        @media (max-width: 768px) {
-            .container {
-                padding: 10px;
-            }
-            
-            .title {
-                font-size: 2rem;
-            }
-            
-            .chat-container {
-                height: 60vh;
-                padding: 20px;
-            }
-            
-            .profile-img {
-                width: 80px;
-                height: 80px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <!-- Animated Stars Background -->
-    <div class="stars"></div>
+def main():
+    # Initialize session state
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
     
-    <div class="container">
-        <div class="header">
-            <img src="https://yt3.ggpht.com/ytc/AIdro_kAkJOKtOPVIrSfZE9_PFaGiJqNEyDpXJfSL3Ow6Q=s88-c-k-c0x00ffffff-no-rj" 
-                 alt="Hitesh Choudhary" class="profile-img">
-            <h1 class="title">Chai aur Code</h1>
-            <p class="subtitle">Ask Hitesh Sir anything about programming! ☕️💻</p>
-        </div>
-        
-        <div class="chat-container">
-            <div class="chat-messages" id="chatMessages">
-                <div class="welcome-message">
-                    <p>🙏 Namaste! Main Hitesh hoon, Chai aur Code se.<br>
-                    Aap koi bhi programming sawal pooch sakte ho! ☕️</p>
-                </div>
-            </div>
-            
-            <div class="input-container">
-                <input type="text" id="messageInput" class="message-input" 
-                       placeholder="Apna sawal yahan type kariye..." maxlength="500">
-                <button id="sendBtn" class="send-btn">Send</button>
-            </div>
-        </div>
+    if "model" not in st.session_state:
+        st.session_state.model = initialize_gemini()
+    
+    # Header
+    st.markdown("""
+    <div class="main-header">
+        <img src="https://yt3.ggpht.com/ytc/AIdro_kAkJOKtOPVIrSfZE9_PFaGiJqNEyDpXJfSL3Ow6Q=s88-c-k-c0x00ffffff-no-rj" 
+             class="profile-img" alt="Hitesh Choudhary">
+        <h1 class="main-title">Chai aur Code</h1>
+        <p class="subtitle">Ask Hitesh Sir anything about programming! ☕️💻</p>
     </div>
-
-    <script>
-        // Create animated stars
-        function createStars() {
-            const starsContainer = document.querySelector('.stars');
-            for (let i = 0; i < 100; i++) {
-                const star = document.createElement('div');
-                star.className = 'star';
-                star.style.left = Math.random() * 100 + '%';
-                star.style.top = Math.random() * 100 + '%';
-                star.style.animationDelay = Math.random() * 3 + 's';
-                starsContainer.appendChild(star);
-            }
-        }
+    """, unsafe_allow_html=True)
+    
+    # Chat container
+    chat_container = st.container()
+    
+    with chat_container:
+        # Display chat messages
+        if len(st.session_state.messages) == 0:
+            st.markdown("""
+            <div class="welcome-message">
+                <p>🙏 Namaste! Main Hitesh hoon, Chai aur Code se.<br>
+                Aap koi bhi programming sawal pooch sakte ho! ☕️</p>
+            </div>
+            """, unsafe_allow_html=True)
         
-        // Create floating particles
-        function createParticles() {
-            const container = document.querySelector('.container');
-            for (let i = 0; i < 20; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.left = Math.random() * 100 + '%';
-                particle.style.top = Math.random() * 100 + '%';
-                particle.style.animationDelay = Math.random() * 6 + 's';
-                container.appendChild(particle);
-            }
-        }
+        for message in st.session_state.messages:
+            if message["role"] == "user":
+                st.markdown(f'<div class="user-message">{message["content"]}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="bot-message">{message["content"]}</div>', unsafe_allow_html=True)
+    
+    # Input section
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        user_input = st.text_input(
+            "Your question:",
+            placeholder="Apna sawal yahan type kariye...",
+            max_chars=500,
+            key="user_input",
+            label_visibility="collapsed"
+        )
+    
+    with col2:
+        send_button = st.button("Send", key="send_btn")
+    
+    # Handle user input
+    if send_button and user_input.strip():
+        # Add user message to session state
+        st.session_state.messages.append({"role": "user", "content": user_input})
         
-        // Initialize animations
-        createStars();
-        createParticles();
-        
-        // Chat functionality
-        const chatMessages = document.getElementById('chatMessages');
-        const messageInput = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
-        
-        function addMessage(content, isUser = false) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+        try:
+            # Generate response
+            full_prompt = f"{SYSTEM_PROMPT}\n\nUser ka sawal: {user_input}\n\nHitesh Sir ke style mein jawab dijiye:"
             
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.textContent = content;
-            
-            messageDiv.appendChild(contentDiv);
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-        
-        function showLoading() {
-            const loadingDiv = document.createElement('div');
-            loadingDiv.className = 'message bot-message';
-            loadingDiv.id = 'loading-message';
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content loading';
-            contentDiv.innerHTML = `
-                <span>Hitesh Sir typing...</span>
-                <div class="loading-dots">
-                    <div class="loading-dot"></div>
-                    <div class="loading-dot"></div>
-                    <div class="loading-dot"></div>
-                </div>
-            `;
-            
-            loadingDiv.appendChild(contentDiv);
-            chatMessages.appendChild(loadingDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-        
-        function hideLoading() {
-            const loadingMessage = document.getElementById('loading-message');
-            if (loadingMessage) {
-                loadingMessage.remove();
-            }
-        }
-        
-        async function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message) return;
-            
-            addMessage(message, true);
-            messageInput.value = '';
-            sendBtn.disabled = true;
-            showLoading();
-            
-            try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ message: message })
-                });
+            with st.spinner("Hitesh Sir typing..."):
+                chat = st.session_state.model.start_chat(history=[])
+                response = chat.send_message(full_prompt)
                 
-                const data = await response.json();
-                hideLoading();
-                
-                if (data.error) {
-                    addMessage(`Sorry bhai, kuch technical issue hai: ${data.error}`);
-                } else {
-                    addMessage(data.response);
-                }
-            } catch (error) {
-                hideLoading();
-                addMessage('Sorry, server se connection nahi ho pa raha. Thoda baad try kariye!');
-            }
+                # Add bot response to session state
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
             
-            sendBtn.disabled = false;
-        }
+            # Rerun to display new messages
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"Sorry bhai, kuch technical issue hai: {str(e)}")
+    
+    # Clear chat button in sidebar
+    with st.sidebar:
+        st.title("Chat Controls")
+        if st.button("🗑️ Clear Chat"):
+            st.session_state.messages = []
+            st.rerun()
         
-        sendBtn.addEventListener('click', sendMessage);
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
-        });
-        
-        // Focus on input when page loads
-        messageInput.focus();
-    </script>
-</body>
-</html>
-'''
+        st.markdown("---")
+        st.markdown("**About Hitesh Sir:**")
+        st.markdown("• Founder of Learn Code Online")
+        st.markdown("• CTO at iNeuron")
+        st.markdown("• Senior Director at Physics Wallah")
+        st.markdown("• 1.4M+ YouTube subscribers")
 
-@app.route('/')
-def home():
-    return render_template_string(HTML_TEMPLATE)
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    try:
-        data = request.get_json()
-        user_message = data['message']
-        
-        # Create full prompt
-        full_prompt = f"{SYSTEM_PROMPT}\n\nUser ka sawal: {user_message}\n\nHitesh Sir ke style mein jawab dijiye:"
-        
-        # Generate response
-        chat = model.start_chat(history=[])
-        response = chat.send_message(full_prompt)
-        
-        return jsonify({'response': response.text})
-        
-    except Exception as e:
-        return jsonify({'error': f"Sorry bhai, technical issue! {str(e)}"}), 500
-
-if __name__ == '__main__':
-    print("🚀 Starting Hitesh Chatbot Server...")
-    print("🌐 Open: http://localhost:5000")
-    print("☕ Chai aur Code chatbot is ready!")
-    app.run(debug=True)
+if __name__ == "__main__":
+    main()
